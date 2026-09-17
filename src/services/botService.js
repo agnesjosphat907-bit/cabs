@@ -1,4 +1,4 @@
-// Polls Telegram getUpdates for inline callback button presses...
+// Polls Telegram getUpdates for inline callback button presses.
 // Returns callback_data string ('APPROVE_PIN' or 'WRONG_PIN') or null on timeout.
 export const pollPinDecision = (timeoutMs = 120000) => {
   return new Promise((resolve) => {
